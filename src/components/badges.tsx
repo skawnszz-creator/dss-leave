@@ -37,16 +37,16 @@ export function TypeChip({ type }: { type: LeaveRequest["leaveType"] }) {
   );
 }
 
-/** 결재 진행: 과장 ✓ → 부장 (차례) → 대표 */
+/** 결재 진행 (순서 없음): 과장 ✓ · 부장 대기 · 대표 ✓ */
 export function StepTrail({ steps }: { steps: StepView[] }) {
   if (steps.length === 0) {
     return <span className="text-xs text-slate-500">결재 없이 등록</span>;
   }
   return (
-    <ol className="flex flex-wrap items-center gap-1 text-xs">
-      {steps.map((s, i) => (
-        <li key={s.id} className="flex items-center gap-1">
-          {i > 0 && <span className="text-slate-300">→</span>}
+    <ul className="flex flex-wrap items-center gap-1 text-xs">
+      <li className="mr-0.5 text-slate-400">결재</li>
+      {steps.map((s) => (
+        <li key={s.id}>
           <span
             title={
               s.decidedByName
@@ -59,17 +59,17 @@ export function StepTrail({ steps }: { steps: StepView[] }) {
                 : s.status === "REJECTED"
                   ? "rounded bg-red-50 px-1.5 py-0.5 text-red-700"
                   : s.status === "PENDING"
-                    ? "rounded bg-amber-50 px-1.5 py-0.5 font-semibold text-amber-900 ring-1 ring-amber-300"
+                    ? "rounded bg-amber-50 px-1.5 py-0.5 text-amber-900 ring-1 ring-amber-300"
                     : "rounded px-1.5 py-0.5 text-slate-400"
             }
           >
             {s.rankName}
             {s.status === "APPROVED" && " ✓"}
             {s.status === "REJECTED" && " ✕"}
-            {s.status === "PENDING" && " · 차례"}
+            {s.status === "PENDING" && " 대기"}
           </span>
         </li>
       ))}
-    </ol>
+    </ul>
   );
 }

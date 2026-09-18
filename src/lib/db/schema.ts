@@ -56,9 +56,13 @@ export const REQUEST_STATUSES = [
 ] as const;
 export type RequestStatus = (typeof REQUEST_STATUSES)[number];
 
+/**
+ * 결재 단계 상태. 결재는 순서 없이 동시에 진행한다 (2026-09-18 변경).
+ * WAITING 은 순서가 있던 초안에서 쓰던 값이라 남겨만 둔다 (새로 만들지 않는다).
+ */
 export const STEP_STATUSES = [
-  "WAITING", // 앞사람 결재를 기다림
-  "PENDING", // 지금 이 직급 차례
+  "WAITING", // (쓰지 않음) 앞사람 결재를 기다림
+  "PENDING", // 이 직급의 승인을 기다림
   "APPROVED",
   "REJECTED",
   "SKIPPED", // 반려·취소로 더 진행하지 않음
@@ -110,7 +114,7 @@ const days = (name: string) =>
   numeric(name, { precision: 5, scale: 1, mode: "number" });
 
 /* ------------------------------------------------------------------ */
-/* web_ranks — 직급. 결재 순서의 기준                                   */
+/* web_ranks — 직급. 누가 결재권자인지의 기준                            */
 /* ------------------------------------------------------------------ */
 
 export const webRanks = pgTable(
@@ -118,7 +122,7 @@ export const webRanks = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
-    /** 클수록 높은 직급. 결재는 신청자보다 높은 직급을 낮은 순서부터 거친다. */
+    /** 클수록 높은 직급. 신청자보다 높은 직급의 결재권자가 모두 승인해야 확정된다. */
     sortOrder: integer("sort_order").notNull(),
     /** 결재권. 과장 이상 */
     canApprove: boolean("can_approve").notNull().default(false),
@@ -339,7 +343,8 @@ export const webLeaveRequests = pgTable(
 );
 
 /* ------------------------------------------------------------------ */
-/* web_approval_steps — 결재 단계 (신청 한 건에 여러 단계)               */
+/* web_approval_steps — 결재 단계 (신청 한 건에 결재권자 수만큼)        */
+/* 순서 없이 동시에 대기하고, 모두 승인하면 확정. step_no 는 표시 순서다  */
 /* 단계는 '사람'이 아니라 '직급'에 걸린다. 같은 직급이 둘이면 누구든 결재 */
 /* ------------------------------------------------------------------ */
 

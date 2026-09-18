@@ -13,7 +13,7 @@ import {
 } from "@/lib/leave/data";
 import { KIND_LABEL, formatDays } from "@/lib/leave/labels";
 
-/** 결재함: 지금 내 차례인 신청 + 내가 처리한 기록 */
+/** 결재함: 내 승인을 기다리는 신청 + 내가 처리한 기록 */
 export default async function ApprovalsPage({
   searchParams,
 }: {
@@ -47,7 +47,7 @@ export default async function ApprovalsPage({
         <h1 className="mb-1 text-xl font-semibold text-slate-900">결재함</h1>
         <DoneBanner code={sp.done} className="mb-4" />
         <p className="mb-4 text-sm text-slate-500">
-          {member.employee.rank.name} 차례인 신청입니다. 반려하면 그 자리에서 끝나고, 승인하면 다음 결재자에게 넘어갑니다.
+          내 승인을 기다리는 신청입니다. 결재권자가 순서 없이 모두 승인하면 확정되고, 한 명이라도 반려하면 그 자리에서 끝납니다.
         </p>
 
         {items.length === 0 ? (

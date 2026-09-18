@@ -2,10 +2,13 @@
  * 휴가 신청·결재 — 상태를 바꾸는 일은 전부 여기서 한다.
  *
  * 호출하는 쪽(서버 액션)이 로그인·권한을 먼저 확인하고 Member/Viewer 를 넘긴다.
- * 그래도 '누구의 휴가인가 · 누구 차례인가'는 여기서 DB 를 다시 읽어 확인한다.
+ * 그래도 '누구의 휴가인가 · 이 사람이 결재할 수 있는가'는 여기서 DB 를 다시 읽어 확인한다.
+ *
+ * 결재는 순서가 없다. 신청하면 결재권자 모두의 결재함에 동시에 들어가고,
+ * 모두 승인하면 확정, 한 명이라도 반려하면 그 자리에서 끝난다.
  * 폼에서 온 ID 는 대상을 찾는 데만 쓰고 권한 판단에는 쓰지 않는다.
  */
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { writeAudit } from "@/lib/audit";
 import type { Member, Viewer } from "@/lib/auth/guards";
@@ -16,6 +19,7 @@ import {
   LEAVE_TYPES,
   webApprovalSteps,
   webLeaveRequests,
+  webRanks,
   type LeaveRequest,
   type LeaveType,
 } from "@/lib/db/schema";
@@ -91,7 +95,7 @@ async function skipOpenSteps(tx: Tx, requestId: string): Promise<void> {
     );
 }
 
-/** 신청 행과 결재 단계를 만든다. 결재할 사람이 없으면 바로 승인한다 */
+/** 신청 행과 결재 단계를 만든다. 결재 단계는 모두 동시에 대기. 결재할 사람이 없으면 바로 승인한다 */
 async function createWithChain(
   tx: Tx,
   member: Member,
@@ -116,7 +120,7 @@ async function createWithChain(
         requestId: request.id,
         stepNo: i + 1,
         rankId: rank.id,
-        status: i === 0 ? ("PENDING" as const) : ("WAITING" as const),
+        status: "PENDING" as const,
       })),
     );
   }
@@ -125,7 +129,7 @@ async function createWithChain(
 
 function submittedMessage(chainNames: string[]): string {
   if (chainNames.length === 0) return "결재 없이 바로 등록되었습니다.";
-  return `신청했습니다. ${chainNames.join(" → ")} 순서로 결재합니다.`;
+  return `신청했습니다. ${chainNames.join("·")} 모두 승인하면 확정됩니다.`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -288,7 +292,7 @@ export async function submitCancel(
     message:
       result.chainNames.length === 0
         ? "휴가를 취소했습니다."
-        : `취소를 신청했습니다. ${result.chainNames.join(" → ")} 순서로 결재합니다.`,
+        : `취소를 신청했습니다. ${result.chainNames.join("·")} 모두 승인하면 취소됩니다.`,
     requestId: result.request.id,
     code: result.chainNames.length === 0 ? "canceled" : "cancel-submitted",
   };
@@ -396,7 +400,7 @@ export async function decideStep(
     const req = await lockRequest(tx, step.requestId);
     if (!req || req.status !== "PENDING") return { error: "이미 처리된 신청입니다." };
 
-    // 권한: 지금 차례인 직급의 사람이어야 하고, 자기 신청은 결재할 수 없다
+    // 권한: 이 단계의 직급인 사람이어야 하고, 자기 신청은 결재할 수 없다
     if (step.rankId !== member.employee.rankId || req.employeeId === member.employee.id) {
       return { error: "이 결재를 처리할 권한이 없습니다." };
     }
@@ -415,26 +419,26 @@ export async function decideStep(
       .where(eq(webApprovalSteps.id, step.id));
 
     let finished = false;
+    let waitingFor: string[] = [];
     if (approve) {
-      const [next] = await tx
-        .select()
+      // 아직 승인하지 않은 결재권자가 남았는가. 신청 행을 잠근 뒤라 동시에 승인해도 한 번만 확정된다
+      const remaining = await tx
+        .select({ rankName: webRanks.name })
         .from(webApprovalSteps)
+        .innerJoin(webRanks, eq(webRanks.id, webApprovalSteps.rankId))
         .where(
           and(
             eq(webApprovalSteps.requestId, req.id),
-            eq(webApprovalSteps.stepNo, step.stepNo + 1),
+            eq(webApprovalSteps.status, "PENDING"),
             eq(webApprovalSteps.isDeleted, false),
           ),
         )
-        .limit(1);
-      if (next) {
-        await tx
-          .update(webApprovalSteps)
-          .set({ status: "PENDING", updatedAt: now })
-          .where(eq(webApprovalSteps.id, next.id));
-      } else {
+        .orderBy(asc(webApprovalSteps.stepNo));
+      if (remaining.length === 0) {
         await finalize(tx, req);
         finished = true;
+      } else {
+        waitingFor = remaining.map((r) => r.rankName);
       }
     } else {
       await tx
@@ -457,14 +461,16 @@ export async function decideStep(
       },
       tx,
     );
-    return { finished };
+    return { finished, waitingFor };
   });
 
   if ("error" in outcome) return fail(outcome.error ?? "처리하지 못했습니다.");
   if (!approve) return { ok: true, message: "반려했습니다.", code: "rejected" };
   return {
     ok: true,
-    message: outcome.finished ? "승인했습니다. 결재가 모두 끝났습니다." : "승인했습니다. 다음 결재자에게 넘어갑니다.",
+    message: outcome.finished
+      ? "승인했습니다. 모든 결재권자가 승인해 확정되었습니다."
+      : `승인했습니다. ${outcome.waitingFor.join("·")}의 승인을 기다립니다.`,
     code: outcome.finished ? "finished" : "approved",
   };
 }

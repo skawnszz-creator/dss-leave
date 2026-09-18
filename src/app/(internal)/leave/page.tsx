@@ -29,12 +29,20 @@ export default async function MyLeavePage({
       <section className="min-w-0 space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold text-slate-900">내 휴가</h1>
-          <Link
-            href="/leave/new"
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
-          >
-            + 휴가 신청
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/leave/print"
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              🖨 사용 내역 인쇄
+            </Link>
+            <Link
+              href="/leave/new"
+              className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+            >
+              + 휴가 신청
+            </Link>
+          </div>
         </div>
 
         <DoneBanner code={sp.done} />
@@ -125,7 +133,7 @@ function RequestCard({ r, today }: { r: RequestView; today: string }) {
               </Link>
               <ActionForm
                 action={cancelLeaveAction}
-                confirm="이 휴가의 취소를 신청할까요? 처음과 같은 순서로 다시 결재합니다."
+                confirm="이 휴가의 취소를 신청할까요? 결재권자가 모두 다시 승인해야 취소됩니다."
                 className="flex flex-wrap items-center gap-2"
               >
                 <input type="hidden" name="targetId" value={r.id} />

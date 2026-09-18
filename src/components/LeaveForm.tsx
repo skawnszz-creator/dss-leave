@@ -13,7 +13,7 @@ const OTHER_TYPES: LeaveType[] = ["CONDOLENCE", "SICK", "RESERVE", "OTHER"];
 
 /**
  * 휴가 신청 · 날짜 변경 신청 폼.
- * 일수와 결재 순서는 미리 보여 주기만 한다. 실제 계산·검사는 서버가 다시 한다.
+ * 일수와 결재권자는 미리 보여 주기만 한다. 실제 계산·검사는 서버가 다시 한다.
  */
 export function LeaveForm({
   action,
@@ -160,7 +160,7 @@ export function LeaveForm({
               "결재 없이 바로 등록됩니다."
             ) : (
               <>
-                결재 순서: <strong>{chainNames.join(" → ")}</strong>
+                결재권자: <strong>{chainNames.join(" · ")}</strong> — 순서 없이 모두 승인하면 확정됩니다
               </>
             )}
           </p>

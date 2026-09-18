@@ -30,3 +30,47 @@ body {
 .tabular {
   font-variant-numeric: tabular-nums;
 }
+
+/* ------------------------------------------------------------------ */
+/* 인쇄 — 내 휴가 사용 내역 (/leave/print)                               */
+/* 화면 위쪽 메뉴·조작 버튼은 감추고, 내역 한 장만 A4 세로로 찍는다.       */
+/* ------------------------------------------------------------------ */
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  /* 배경색을 빼고 인쇄하는 것이 기본값이다. 표 머리의 옅은 회색을 살린다. */
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  .print-sheet {
+    max-width: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+  }
+
+  .print-sheet tr {
+    break-inside: avoid;
+  }
+}

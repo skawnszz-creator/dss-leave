@@ -3,6 +3,7 @@ import Link from "next/link";
 import { BalanceCard } from "@/components/BalanceCard";
 import { StatusBadge, TypeChip } from "@/components/badges";
 import { requireViewer } from "@/lib/auth/guards";
+import { japanHolidaysBetween } from "@/lib/jp-holidays";
 import {
   calendarWeeks,
   dayOfWeek,
@@ -52,6 +53,8 @@ export default async function CalendarPage({
   ]);
 
   const holidayName = new Map(holidays.map((h) => [h.day, h.name]));
+  // 거래처 교산(일본)의 법정 휴일. 표시만 하고 한국 휴가 계산에는 쓰지 않는다
+  const kyosan = japanHolidaysBetween(from, to);
   const holidaySet = new Set(holidayName.keys());
 
   // 휴가를 날짜별로 펼친다. 주말·공휴일에는 표시하지 않는다.
@@ -107,7 +110,7 @@ export default async function CalendarPage({
                   <th
                     key={w}
                     className={`border-b border-slate-200 py-2 text-xs font-semibold ${
-                      i === 0 ? "text-red-600" : i === 6 ? "text-blue-600" : "text-slate-500"
+                      i === 0 || i === 6 ? "text-red-600" : "text-slate-500"
                     }`}
                   >
                     {w}
@@ -121,38 +124,53 @@ export default async function CalendarPage({
                   {week.map((d) => {
                     const inMonth = ymOf(d) === ym;
                     const holiday = holidayName.get(d);
+                    const jp = kyosan.get(d);
                     const dow = dayOfWeek(d);
                     const list = byDay.get(d) ?? [];
                     const isToday = d === today;
                     const isSelected = d === selected;
+                    // 빨간날: 주말(토·일)과 공휴일·회사 휴무일 (근로자의 날 등 휴일 목록에 있는 날)
+                    const isRedDay = Boolean(holiday) || dow === 0 || dow === 6;
                     return (
                       <td
                         key={d}
                         className={`h-28 border-b border-r border-slate-100 align-top last:border-r-0 ${
-                          inMonth ? "" : "bg-slate-50/70"
-                        } ${isSelected ? "bg-sky-50" : ""}`}
+                          isSelected
+                            ? "bg-sky-50"
+                            : !inMonth
+                              ? "bg-slate-50/70"
+                              : isRedDay
+                                ? "bg-red-50/60"
+                                : ""
+                        }`}
                       >
                         <Link
                           href={`/?ym=${ym}&date=${d}`}
                           scroll={false}
                           className="flex h-full flex-col gap-1 p-1.5 hover:bg-slate-50"
                         >
-                          <span className="flex items-center gap-1">
+                          <span className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
                             <span
                               className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-semibold ${
                                 isToday
                                   ? "bg-slate-900 text-white"
-                                  : holiday || dow === 0
+                                  : isRedDay
                                     ? "text-red-600"
-                                    : dow === 6
-                                      ? "text-blue-600"
-                                      : "text-slate-700"
+                                    : "text-slate-700"
                               } ${inMonth ? "" : "opacity-40"}`}
                             >
                               {Number(d.slice(8))}
                             </span>
+                            {jp && (
+                              <span
+                                title={`교산 휴무일: ${jp.ja} (${jp.ko})`}
+                                className={`whitespace-nowrap text-[11px] font-medium text-red-600 ${inMonth ? "" : "opacity-40"}`}
+                              >
+                                (교산 휴무일)
+                              </span>
+                            )}
                             {holiday && (
-                              <span className={`truncate text-[11px] text-red-600 ${inMonth ? "" : "opacity-40"}`}>
+                              <span className={`max-w-full truncate text-[11px] text-red-600 ${inMonth ? "" : "opacity-40"}`}>
                                 {holiday}
                               </span>
                             )}
@@ -164,7 +182,7 @@ export default async function CalendarPage({
                                 e.pending ? " (결재 대기)" : ""
                               }`}
                               className={`block truncate rounded border px-1.5 py-0.5 text-xs ${TYPE_CHIP[e.leaveType]} ${
-                                e.pending ? "border-dashed opacity-55" : ""
+                                e.pending ? "animate-pulse border-dashed" : ""
                               } ${e.isMine ? "font-semibold" : ""}`}
                             >
                               {e.employeeName} {TYPE_SHORT[e.leaveType]}
@@ -216,6 +234,11 @@ export default async function CalendarPage({
             {holidayName.get(selected) && (
               <p className="mt-1 text-xs text-red-600">{holidayName.get(selected)}</p>
             )}
+            {kyosan.get(selected) && (
+              <p className="mt-1 text-xs text-red-600">
+                교산 휴무일: {kyosan.get(selected)!.ja} ({kyosan.get(selected)!.ko})
+              </p>
+            )}
             {selectedEntries.length === 0 ? (
               <p className="mt-3 text-sm text-slate-400">휴가자가 없습니다.</p>
             ) : (
@@ -253,7 +276,11 @@ function Legend() {
       <span className={`rounded border px-1.5 py-0.5 ${TYPE_CHIP.AM_HALF}`}>반차</span>
       <span className={`rounded border px-1.5 py-0.5 ${TYPE_CHIP.SICK}`}>병가</span>
       <span className={`rounded border px-1.5 py-0.5 ${TYPE_CHIP.CONDOLENCE}`}>경조사</span>
-      <span className={`rounded border border-dashed px-1.5 py-0.5 opacity-55 ${TYPE_CHIP.ANNUAL}`}>결재 대기</span>
+      <span className={`animate-pulse rounded border border-dashed px-1.5 py-0.5 ${TYPE_CHIP.ANNUAL}`}>결재 대기</span>
+      <span className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-red-600">빨간날 = 주말·공휴일</span>
+      <span className="px-0.5">
+        <span className="font-medium text-red-600">(교산 휴무일)</span> = 일본 법정 휴일
+      </span>
     </div>
   );
 }

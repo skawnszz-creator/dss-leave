@@ -142,14 +142,16 @@ export async function loadLedgerInput(
   };
 }
 
+/** 잔여 일수. on 을 주면 그날 기준 (예: 지난해 인쇄는 12월 31일 기준) */
 export async function getBalance(
   employee: { id: string; hireDate: string },
   ctx?: { holidays: ReadonlySet<string>; rules: readonly TenureRuleRow[] },
+  on?: string,
 ): Promise<Balance> {
   const holidays = ctx?.holidays ?? (await loadHolidaySet());
   const rules = ctx?.rules ?? (await loadRules());
   const input = await loadLedgerInput(employee, holidays, rules);
-  return balanceOn(input, todayKst());
+  return balanceOn(input, on ?? todayKst());
 }
 
 /* ------------------------------------------------------------------ */
@@ -157,7 +159,8 @@ export async function getBalance(
 /* ------------------------------------------------------------------ */
 
 /**
- * 신청자보다 높은 직급 중 결재권이 있는 직급을 낮은 순서부터.
+ * 결재권자: 신청자보다 높은 직급 중 결재권이 있는 직급 (표시는 낮은 직급부터).
+ * 순서 없이 모두 승인해야 확정된다.
  * 그 직급에 재직 중인 사람이 없으면 건너뛴다.
  * 대표처럼 위에 아무도 없으면 빈 배열 → 결재 없이 바로 등록.
  */
@@ -353,6 +356,24 @@ export async function myRequests(employeeId: string, sinceYear: number): Promise
   return attach(rows);
 }
 
+/** 그해에 걸친 휴가 (새 신청·날짜 변경분). 인쇄용 — 날짜 순 */
+export async function requestsInYear(employeeId: string, year: number): Promise<RequestView[]> {
+  const rows = await db
+    .select()
+    .from(webLeaveRequests)
+    .where(
+      and(
+        eq(webLeaveRequests.employeeId, employeeId),
+        eq(webLeaveRequests.isDeleted, false),
+        inArray(webLeaveRequests.kind, [...LIVE_KINDS]),
+        lte(webLeaveRequests.startDate, `${year}-12-31`),
+        gte(webLeaveRequests.endDate, `${year}-01-01`),
+      ),
+    )
+    .orderBy(asc(webLeaveRequests.startDate), asc(webLeaveRequests.createdAt));
+  return attach(rows);
+}
+
 export async function requestById(id: string): Promise<RequestView | null> {
   if (!isUuid(id)) return null;
   const rows = await db
@@ -375,7 +396,7 @@ export type ApprovalItem = RequestView & {
   applicantHireDate: string;
 };
 
-/** 지금 내 직급 차례인 결재 (내 신청은 빼고) */
+/** 내 직급의 승인을 기다리는 결재 (내 신청은 빼고) */
 export async function pendingForApprover(viewer: Viewer): Promise<ApprovalItem[]> {
   if (!viewer.employee || !viewer.isApprover) return [];
   const rows = await db

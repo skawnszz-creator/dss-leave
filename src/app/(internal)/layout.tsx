@@ -18,7 +18,7 @@ export default async function InternalLayout({ children }: { children: ReactNode
     <div className="flex min-h-full flex-col">
       {devLoginEnabled() && (
         // dss-auth OIDC 연결 시 폐기 대상
-        <div className="bg-amber-100 px-4 py-1 text-center text-xs text-amber-900">
+        <div className="no-print bg-amber-100 px-4 py-1 text-center text-xs text-amber-900">
           개발용 임시 로그인 · 가짜 데이터로 보는 초안입니다
         </div>
       )}

@@ -51,7 +51,7 @@ export default async function ChangeLeavePage({ params }: { params: Promise<{ id
         {formatDays(req.days)}
       </p>
       <p className="mb-5 mt-1 text-xs text-slate-500">
-        처음과 같은 순서로 다시 결재합니다. 승인되기 전까지는 원래 휴가가 그대로 유지됩니다.
+        결재권자가 모두 다시 승인해야 바뀝니다. 승인되기 전까지는 원래 휴가가 그대로 유지됩니다.
       </p>
       <LeaveForm
         action={changeLeaveAction}

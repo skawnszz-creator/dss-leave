@@ -96,10 +96,10 @@ export default async function SettingsPage({
 
       {/* 직급 */}
       <section className="rounded-lg border border-slate-200 bg-white p-4">
-        <h2 className="text-sm font-semibold text-slate-800">직급과 결재 순서</h2>
+        <h2 className="text-sm font-semibold text-slate-800">직급과 결재권자</h2>
         <p className="mb-3 mt-0.5 text-xs text-slate-500">
-          순서 숫자가 클수록 높은 직급입니다. 신청하면 신청자보다 높은 직급 중 &lsquo;결재&rsquo;에 체크된 직급이 낮은 순서부터 결재합니다.
-          그 직급에 사람이 없으면 건너뜁니다. 맨 위 직급(대표)은 결재 없이 바로 등록됩니다.
+          순서 숫자가 클수록 높은 직급입니다. 신청하면 신청자보다 높은 직급 중 &lsquo;결재&rsquo;에 체크된 직급 모두에게 동시에 가고,
+          순서 없이 모두 승인하면 확정됩니다. 그 직급에 사람이 없으면 빠집니다. 맨 위 직급(대표)은 결재 없이 바로 등록됩니다.
         </p>
         <div className="space-y-2">
           {ranks.map((r) => (
@@ -120,8 +120,8 @@ export default async function SettingsPage({
                 </button>
               </ActionForm>
               <span className="text-xs text-slate-400">
-                신청 시 결재:{" "}
-                {approverNames.filter((a) => a.sortOrder > r.sortOrder).map((a) => a.name).join(" → ") || "없음 (바로 등록)"}
+                신청 시 결재권자:{" "}
+                {approverNames.filter((a) => a.sortOrder > r.sortOrder).map((a) => a.name).join(" · ") || "없음 (바로 등록)"}
               </span>
               <ActionForm action={deleteRankAction} confirm={`'${r.name}' 직급을 지울까요?`}>
                 <input type="hidden" name="id" value={r.id} />

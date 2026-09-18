@@ -10,10 +10,11 @@ import { sql } from "drizzle-orm";
 
 process.loadEnvFile(".env.local");
 
+/** 결재는 순서가 없다. approved = 이미 승인한 결재권자 직급 */
 type Outcome =
   | { status: "APPROVED" }
-  | { status: "PENDING"; at: number }
-  | { status: "REJECTED"; at: number; comment: string };
+  | { status: "PENDING"; approved: string[] }
+  | { status: "REJECTED"; by: string; comment: string; approved?: string[] };
 
 async function main() {
   if (process.env.DEV_FAKE_LOGIN_ENABLED !== "true") {
@@ -181,9 +182,9 @@ async function main() {
           const stepNo = i + 1;
           let stepStatus: (typeof s.STEP_STATUSES)[number];
           if (outcome.status === "APPROVED") stepStatus = "APPROVED";
-          else if (stepNo < outcome.at) stepStatus = "APPROVED";
-          else if (stepNo === outcome.at) stepStatus = outcome.status === "PENDING" ? "PENDING" : "REJECTED";
-          else stepStatus = outcome.status === "PENDING" ? "WAITING" : "SKIPPED";
+          else if ((outcome.approved ?? []).includes(r.name)) stepStatus = "APPROVED";
+          else if (outcome.status === "REJECTED") stepStatus = outcome.by === r.name ? "REJECTED" : "SKIPPED";
+          else stepStatus = "PENDING";
           const decided = stepStatus === "APPROVED" || stepStatus === "REJECTED";
           const decider = whoHolds(r.id);
           return {
@@ -206,14 +207,14 @@ async function main() {
     await leave("이준호", "ANNUAL", "2026-09-07", "2026-09-08", "가족 행사", { status: "APPROVED" });
     await leave("박지은", "AM_HALF", "2026-09-11", "2026-09-11", "병원 진료", { status: "APPROVED" });
     await leave("송하린", "SICK", "2026-09-15", "2026-09-15", "감기몸살", { status: "APPROVED" });
-    await leave("한도윤", "ANNUAL", "2026-09-21", "2026-09-23", "추석 귀성", { status: "PENDING", at: 2 });
-    await leave("정민재", "ANNUAL", "2026-09-28", "2026-09-29", "여행", { status: "PENDING", at: 1 });
-    await leave("김서연", "PM_HALF", "2026-09-30", "2026-09-30", "은행 업무", { status: "PENDING", at: 1 });
+    await leave("한도윤", "ANNUAL", "2026-09-21", "2026-09-23", "추석 귀성", { status: "PENDING", approved: ["과장"] });
+    await leave("정민재", "ANNUAL", "2026-09-28", "2026-09-29", "여행", { status: "PENDING", approved: [] });
+    await leave("김서연", "PM_HALF", "2026-09-30", "2026-09-30", "은행 업무", { status: "PENDING", approved: [] });
     await leave("최동욱", "ANNUAL", "2026-10-06", "2026-10-08", "해외 출장 후 휴식", { status: "APPROVED" });
     await leave("윤성호", "ANNUAL", "2026-10-12", "2026-10-12", null, { status: "APPROVED" });
     await leave("박지은", "ANNUAL", "2026-10-19", "2026-10-20", "여행", {
       status: "REJECTED",
-      at: 1,
+      by: "과장",
       comment: "마감 주간이라 다른 날로 부탁드립니다",
     });
 

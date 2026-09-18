@@ -7,7 +7,7 @@ import { NavLink } from "./NavLink";
 export function AppHeader({ viewer, pendingCount }: { viewer: Viewer; pendingCount: number }) {
   const { employee } = viewer;
   return (
-    <header className="border-b border-slate-200 bg-white">
+    <header className="no-print border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-[1280px] flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
         <Link href="/" className="mr-2 flex items-baseline gap-2">
           <span className="text-lg font-semibold tracking-tight text-slate-900">휴가 관리</span>
