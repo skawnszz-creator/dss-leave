@@ -1,0 +1,16 @@
+# 개발용 PostgreSQL (Docker 가 있는 PC 에서만).
+# 지금 개발 PC 에는 Docker 가 없어서 C:\Users\이남준\pgsql 의 PostgreSQL 에
+# dss_leave DB 를 따로 만들어 쓴다. (계측기 DB 와 섞이지 않는다)
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: dss_leave
+      POSTGRES_PASSWORD: ${DSS_LEAVE_DB_PASSWORD:?DSS_LEAVE_DB_PASSWORD 를 설정하세요}
+      POSTGRES_DB: dss_leave
+    ports:
+      - "5433:5432"
+    volumes:
+      - dss_leave_pg:/var/lib/postgresql/data
+volumes:
+  dss_leave_pg:

@@ -1,0 +1,24 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+
+# env files — 비밀값. 절대 커밋하지 않는다.
+.env*
+!.env.example
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts

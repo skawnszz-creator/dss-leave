@@ -1,0 +1,111 @@
+# DSS 휴가 관리 — 설계 (초안)
+
+- 작성일: 2026-09-18
+- 근거: [REQUIREMENTS.md](./REQUIREMENTS.md)
+- 상태: 사용자가 "오늘 바로 초안 결과물 확인"을 요청해, 설계 승인과 초안 화면 확인을 한 번에 받는다.
+
+---
+
+## 1. 화면 흐름
+
+```
+                   ┌──────────────┐
+  (로그인 안 됨) ─▶ │ /login       │  지금은 개발용 임시 로그인. 나중엔 통합 로그인 포털로 보낸다
+                   └──────┬───────┘
+                          │
+            명단 연결 전 ─┼─▶ /pending  "관리자 확인 대기"
+                          ▼
+┌───────────────────────────────────────────────────────────────┐
+│ /  달력 (첫 화면)                                               │
+│   이번 달 달력: 날짜별 "이름 종류" (결재 대기는 흐린 점선)          │
+│   오른쪽: [+ 휴가 신청] · 결재 대기 N건(결재권자) · 날짜 상세 · 내 남은 휴가 │
+└──┬──────────────┬──────────────┬───────────────┬──────────────┘
+   │              │              │               │ (휴가 관리자만)
+   ▼              ▼              ▼               ▼
+/leave/new     /leave          /approvals      /admin/employees ─▶ /admin/employees/[id]
+휴가 신청       내 휴가          결재함           직원 명단·확인 대기     입사일·계산 내역·일수 조정
+               ├ 거둬들이기     승인/반려         계정 연결               계정·관리자 지정·휴가 정정
+               ├ 날짜 변경 ─▶ /leave/[id]/change
+               └ 취소 신청                                      /admin/settings
+                                                                근속 표·직급·공휴일
+```
+
+- 처리 후에는 `?done=코드` 로 돌아와 화면 위에 안내 문구를 띄운다 (`DoneBanner`).
+- 권한이 없는 화면에 들어오면 첫 화면으로 돌려보낸다. 실제 차단은 서버(`src/lib/auth/guards.ts`)에서 한다.
+
+## 2. 데이터 구조
+
+모든 테이블: `web_` 접두사, UUID 기본키, `created_at`/`updated_at`(timestamptz), 소프트 삭제 4컬럼
+(`is_deleted`·`deleted_at`·`deleted_by`·`delete_reason`), 살아 있는 행에 부분 인덱스.
+(세션·감사 로그는 지우지 않으므로 소프트 삭제 컬럼이 없다)
+
+| 테이블 | 하는 일 | 주요 컬럼 |
+|---|---|---|
+| `web_ranks` | 직급과 결재 순서 | name, sort_order(클수록 높음), can_approve |
+| `web_employees` | 직원 명단 (휴가 관리 대상) | name, rank_id, hire_date, is_active(재직) |
+| `web_users` | 로그인 계정 | auth_sub(UNIQUE, dss-auth sub), display_name, email, role, employee_id(명단 연결) |
+| `web_sessions` | 이 사이트 세션 | token_hash(sha256), expires_at, revoked_at |
+| `web_tenure_rules` | 근속 연차별 일수 | from_year, to_year, days |
+| `web_holidays` | 공휴일·회사 휴무일 | day, name, kind |
+| `web_leave_requests` | 휴가 신청 (중심) | employee_id, kind(NEW·CHANGE·CANCEL), target_request_id, leave_type, start/end_date, days, deducts, reason, status |
+| `web_approval_steps` | 결재 단계 | request_id, step_no, rank_id, status, decided_by…, comment |
+| `web_leave_adjustments` | 관리자 일수 조정 | employee_id, bucket(ANNUAL·MONTHLY), year, days(±), reason |
+| `web_audit_logs` | 감사 로그 (append-only) | actor, action, summary, changes |
+
+### 로그인 계정과 직원 명단을 나눈 이유
+
+포털에서 처음 들어온 사람은 `web_users` 에 **가장 낮은 권한, 명단 연결 없음**으로 만들어진다(자동 등록).
+휴가 관리자가 "명단의 누구인지" 연결해야 쓸 수 있다. 명단은 로그인 전에도 미리 만들 수 있고,
+퇴사자는 명단에서 '재직 중'만 풀면 기록은 그대로 남는다.
+
+### 신청 상태
+
+```
+NEW    : PENDING ─승인(마지막 단계)─▶ APPROVED ─(CHANGE 승인)─▶ SUPERSEDED
+                 ─반려──────────────▶ REJECTED              ─(CANCEL 승인·관리자 정정)─▶ CANCELED
+                 ─신청자 거둬들임────▶ WITHDRAWN
+CHANGE : 원래 휴가를 가리키는 새 신청. 승인되면 원래 휴가는 SUPERSEDED, 이 신청이 새 휴가가 된다
+CANCEL : 원래 휴가를 가리키는 취소 신청. 승인되면 원래 휴가가 CANCELED
+```
+
+결재가 끝난 휴가는 행을 고치지 않는다. 그래서 "누가 언제 무엇을 바꿨나"가 신청 기록에 그대로 남는다.
+
+### 결재 순서
+
+신청자보다 **높은 직급 중 결재권이 있는 직급**을 낮은 순서부터. 그 직급에 재직 중인 사람이 없으면 건너뛴다.
+단계는 사람이 아니라 직급에 걸리므로 같은 직급이 둘이면 누구든 결재할 수 있다. 위에 아무도 없으면(대표) 바로 승인.
+
+## 3. 계산 방식 (`src/lib/leave/rules.ts`)
+
+- **근속**: 입사일부터 채운 달 수. 만 12개월 = 1년. 말일 입사는 다음 달 말일로 맞춘다.
+- **연차**: 매년 1월 1일 기준 만 근속으로 근속 표를 찾는다. 1월 1일에 만 1년 미만이면 0 (월차 대상).
+- **월차**: 입사 후 1~11개월째 되는 날마다 1일. 입사 1주년 전날까지 쓸 수 있다 (해가 바뀌어도 유지).
+- **차감 배분**: 휴가 하루하루를 날짜 순서대로, 그날 쓸 수 있는 주머니 중 **먼저 사라질 것부터** 뺀다.
+  주머니 = 그해 연차(12월 31일까지) · 월차(1주년 전날까지). 월차는 그날까지 생긴 만큼만 쓸 수 있다.
+- **남은 휴가** = 받은 일수 − 승인된 휴가 − 결재 대기 중인 휴가. 날짜 변경 신청은 승인 전까지 넣지 않는다.
+- **신청 검사**: 새 신청을 넣었을 때 '빼지 못한 일수'가 늘어나면 거절 (모자란 일수를 알려 준다).
+- 일수는 저장하지 않고 **그때그때 계산**한다. 관리자 조정만 저장한다.
+
+## 4. 남은 문제 (초안에서 정하지 않은 것)
+
+| # | 문제 | 지금 동작 |
+|---|---|---|
+| 1 | 만 1년이 된 날부터 다음 1월 1일까지 받을 연차가 없다 (REQUIREMENTS 9-2) | 관리자 조정으로 채운다 |
+| 2 | 근속 표를 바꾸면 지난 해 숫자도 다시 계산된다 | 그대로 둔다. 해마다 확정(스냅샷)할지 결정 필요 |
+| 3 | 개근 여부를 알 수 없다 (출퇴근 기록 없음) | 월차는 매달 자동. 결근은 관리자가 -1 조정 |
+| 4 | 결재권자가 오래 자리를 비우면 결재가 멈춘다 | 2차 후보 (대신 결재) |
+| 5 | 결재 요청 알림이 사이트 안에만 있다 | 1차 범위대로. 이메일은 2차 후보 |
+
+## 5. 로그인 연결 자리 (다른 직원 작업)
+
+`src/lib/auth/` 만 바꾸면 되게 격리해 두었다.
+
+| 파일 | 지금 | 연결 후 |
+|---|---|---|
+| `session.ts` | 서버 저장형 세션 (`leave_session` 쿠키, 12시간) | 그대로 |
+| `guards.ts` | 권한 판정 (`requireMember` 등) | 그대로 |
+| `dev-login.ts` | 임시 로그인 | **삭제** |
+| `oidc.ts` | 없음 | discovery · PKCE(S256) · state · nonce · ID 토큰 검증(jose, RS256) → `web_users` upsert → `createSession` |
+
+화면 쪽은 `/login` 의 임시 로그인 UI 와 `(internal)/layout.tsx` 의 노란 띠만 지우면 된다
+(둘 다 `dss-auth OIDC 연결 시 폐기 대상` 주석이 붙어 있다).

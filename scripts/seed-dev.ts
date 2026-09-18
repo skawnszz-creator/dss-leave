@@ -1,0 +1,234 @@
+/**
+ * 개발용 가짜 데이터.  npm run seed:dev
+ *
+ * - DEV_FAKE_LOGIN_ENABLED=true 인 개발 환경에서만 돈다.
+ * - 명단이 비어 있을 때만 넣는다. 기존 데이터를 지우거나 덮어쓰지 않는다.
+ * - 이름은 전부 가짜다. 조직 구조(대표·부장·과장·대리 3·사원 2, 실장 제외)만 실제와 같게 맞췄다.
+ *   실제 명단은 운영 시작 때 휴가 관리자가 화면에서 입력한다.
+ */
+import { sql } from "drizzle-orm";
+
+process.loadEnvFile(".env.local");
+
+type Outcome =
+  | { status: "APPROVED" }
+  | { status: "PENDING"; at: number }
+  | { status: "REJECTED"; at: number; comment: string };
+
+async function main() {
+  if (process.env.DEV_FAKE_LOGIN_ENABLED !== "true") {
+    throw new Error("개발 환경(DEV_FAKE_LOGIN_ENABLED=true)에서만 가짜 데이터를 넣을 수 있습니다.");
+  }
+
+  // .env.local 을 읽은 뒤에 불러와야 DB 주소가 잡힌다
+  const { db } = await import("../src/lib/db");
+  const s = await import("../src/lib/db/schema");
+  const { fakeSubFor } = await import("../src/lib/auth/dev-login");
+  const { LEAVE_TYPE_INFO, computeLeaveDays } = await import("../src/lib/leave/rules");
+
+  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(s.webEmployees);
+  if (n > 0) {
+    console.log(`명단에 이미 ${n}명이 있어 아무것도 넣지 않았습니다.`);
+    process.exit(0);
+  }
+
+  const HOLIDAYS: [string, string][] = [
+    ["2026-01-01", "신정"],
+    ["2026-02-16", "설날 연휴"],
+    ["2026-02-17", "설날"],
+    ["2026-02-18", "설날 연휴"],
+    ["2026-03-01", "삼일절"],
+    ["2026-03-02", "대체공휴일(삼일절)"],
+    ["2026-05-01", "근로자의 날"],
+    ["2026-05-05", "어린이날"],
+    ["2026-05-24", "부처님오신날"],
+    ["2026-05-25", "대체공휴일(부처님오신날)"],
+    ["2026-06-03", "전국동시지방선거"],
+    ["2026-06-06", "현충일"],
+    ["2026-08-15", "광복절"],
+    ["2026-08-17", "대체공휴일(광복절)"],
+    ["2026-09-24", "추석 연휴"],
+    ["2026-09-25", "추석"],
+    ["2026-09-26", "추석 연휴"],
+    ["2026-10-03", "개천절"],
+    ["2026-10-05", "대체공휴일(개천절)"],
+    ["2026-10-09", "한글날"],
+    ["2026-12-25", "성탄절"],
+    ["2027-01-01", "신정"],
+    ["2027-02-05", "설날 연휴"],
+    ["2027-02-06", "설날"],
+    ["2027-02-07", "설날 연휴"],
+    ["2027-02-08", "대체공휴일(설날)"],
+    ["2027-03-01", "삼일절"],
+    ["2027-05-01", "근로자의 날"],
+    ["2027-05-05", "어린이날"],
+    ["2027-05-13", "부처님오신날"],
+    ["2027-06-06", "현충일"],
+    ["2027-08-15", "광복절"],
+    ["2027-08-16", "대체공휴일(광복절)"],
+    ["2027-09-14", "추석 연휴"],
+    ["2027-09-15", "추석"],
+    ["2027-09-16", "추석 연휴"],
+    ["2027-10-03", "개천절"],
+    ["2027-10-04", "대체공휴일(개천절)"],
+    ["2027-10-09", "한글날"],
+    ["2027-10-11", "대체공휴일(한글날)"],
+    ["2027-12-25", "성탄절"],
+    ["2027-12-27", "대체공휴일(성탄절)"],
+  ];
+  const holidaySet = new Set(HOLIDAYS.map(([d]) => d));
+
+  await db.transaction(async (tx) => {
+    // 직급 — 실장은 결재선에서 빠지고 휴가 관리 대상도 아니라 넣지 않는다
+    const ranks = await tx
+      .insert(s.webRanks)
+      .values([
+        { name: "사원", sortOrder: 10, canApprove: false },
+        { name: "대리", sortOrder: 20, canApprove: false },
+        { name: "과장", sortOrder: 30, canApprove: true },
+        { name: "부장", sortOrder: 50, canApprove: true },
+        { name: "대표", sortOrder: 90, canApprove: true },
+      ])
+      .returning();
+    const rank = (name: string) => ranks.find((r) => r.name === name)!;
+
+    // 근속 표 — 1~2년차 10일, 3~4년차 11일은 인터뷰 예시. 나머지는 화면을 보기 위한 임시값
+    await tx.insert(s.webTenureRules).values([
+      { fromYear: 1, toYear: 2, days: 10 },
+      { fromYear: 3, toYear: 4, days: 11 },
+      { fromYear: 5, toYear: 6, days: 12 },
+      { fromYear: 7, toYear: 8, days: 13 },
+      { fromYear: 9, toYear: 10, days: 14 },
+      { fromYear: 11, toYear: 40, days: 15 },
+    ]);
+
+    await tx.insert(s.webHolidays).values(HOLIDAYS.map(([day, name]) => ({ day, name, kind: "PUBLIC" as const })));
+
+    const people: [string, string, string][] = [
+      ["윤성호", "대표", "2012-03-02"],
+      ["최동욱", "부장", "2016-07-01"],
+      ["정민재", "과장", "2019-04-15"],
+      ["김서연", "대리", "2021-11-08"],
+      ["이준호", "대리", "2022-06-13"],
+      ["박지은", "대리", "2023-02-20"],
+      ["한도윤", "사원", "2024-09-02"],
+      ["송하린", "사원", "2026-03-03"],
+    ];
+    const employees = await tx
+      .insert(s.webEmployees)
+      .values(people.map(([name, r, hireDate]) => ({ name, rankId: rank(r).id, hireDate })))
+      .returning();
+    const emp = (name: string) => employees.find((e) => e.name === name)!;
+
+    const users = await tx
+      .insert(s.webUsers)
+      .values([
+        ...employees.map((e) => ({
+          authSub: fakeSubFor(e.name),
+          displayName: e.name,
+          role: e.name === "김서연" ? ("LEAVE_ADMIN" as const) : ("MEMBER" as const),
+          employeeId: e.id,
+        })),
+        // 명단에 아직 연결되지 않은 계정 (확인 대기 화면·연결 기능을 보기 위한 것)
+        { authSub: fakeSubFor("신입 테스트"), displayName: "신입 테스트", role: "MEMBER" as const },
+      ])
+      .returning();
+    const userOf = (name: string) => users.find((u) => u.displayName === name)!;
+
+    const approverRanks = ranks.filter((r) => r.canApprove).sort((a, b) => a.sortOrder - b.sortOrder);
+    const whoHolds = (rankId: string) => employees.find((e) => e.rankId === rankId)!;
+
+    async function leave(
+      name: string,
+      leaveType: (typeof s.LEAVE_TYPES)[number],
+      startDate: string,
+      endDate: string,
+      reason: string | null,
+      outcome: Outcome,
+    ) {
+      const e = emp(name);
+      const myOrder = ranks.find((r) => r.id === e.rankId)!.sortOrder;
+      const chain = approverRanks.filter((r) => r.sortOrder > myOrder);
+      const computed = computeLeaveDays(leaveType, startDate, endDate, holidaySet);
+      if (!computed.ok) throw new Error(`${name} ${startDate}: ${computed.error}`);
+
+      const decidedAt = new Date(`${startDate}T00:00:00+09:00`);
+      decidedAt.setDate(decidedAt.getDate() - 5);
+
+      const status =
+        outcome.status === "APPROVED" ? "APPROVED" : outcome.status === "PENDING" ? "PENDING" : "REJECTED";
+      const [req] = await tx
+        .insert(s.webLeaveRequests)
+        .values({
+          employeeId: e.id,
+          kind: "NEW",
+          leaveType,
+          startDate,
+          endDate,
+          days: computed.days,
+          deducts: LEAVE_TYPE_INFO[leaveType].deducts,
+          reason,
+          status,
+          statusNote: outcome.status === "REJECTED" ? outcome.comment : null,
+          decidedAt: status === "PENDING" ? null : decidedAt,
+          submittedByUserId: userOf(name).id,
+        })
+        .returning();
+
+      if (chain.length === 0) return;
+      await tx.insert(s.webApprovalSteps).values(
+        chain.map((r, i) => {
+          const stepNo = i + 1;
+          let stepStatus: (typeof s.STEP_STATUSES)[number];
+          if (outcome.status === "APPROVED") stepStatus = "APPROVED";
+          else if (stepNo < outcome.at) stepStatus = "APPROVED";
+          else if (stepNo === outcome.at) stepStatus = outcome.status === "PENDING" ? "PENDING" : "REJECTED";
+          else stepStatus = outcome.status === "PENDING" ? "WAITING" : "SKIPPED";
+          const decided = stepStatus === "APPROVED" || stepStatus === "REJECTED";
+          const decider = whoHolds(r.id);
+          return {
+            requestId: req.id,
+            stepNo,
+            rankId: r.id,
+            status: stepStatus,
+            decidedByEmployeeId: decided ? decider.id : null,
+            decidedByUserId: decided ? userOf(decider.name).id : null,
+            comment: stepStatus === "REJECTED" && outcome.status === "REJECTED" ? outcome.comment : null,
+            decidedAt: decided ? decidedAt : null,
+          };
+        }),
+      );
+    }
+
+    await leave("이준호", "ANNUAL", "2026-08-20", "2026-08-21", "여름 휴가", { status: "APPROVED" });
+    await leave("정민재", "ANNUAL", "2026-06-22", "2026-06-22", null, { status: "APPROVED" });
+    await leave("송하린", "ANNUAL", "2026-07-10", "2026-07-10", "개인 사정", { status: "APPROVED" });
+    await leave("이준호", "ANNUAL", "2026-09-07", "2026-09-08", "가족 행사", { status: "APPROVED" });
+    await leave("박지은", "AM_HALF", "2026-09-11", "2026-09-11", "병원 진료", { status: "APPROVED" });
+    await leave("송하린", "SICK", "2026-09-15", "2026-09-15", "감기몸살", { status: "APPROVED" });
+    await leave("한도윤", "ANNUAL", "2026-09-21", "2026-09-23", "추석 귀성", { status: "PENDING", at: 2 });
+    await leave("정민재", "ANNUAL", "2026-09-28", "2026-09-29", "여행", { status: "PENDING", at: 1 });
+    await leave("김서연", "PM_HALF", "2026-09-30", "2026-09-30", "은행 업무", { status: "PENDING", at: 1 });
+    await leave("최동욱", "ANNUAL", "2026-10-06", "2026-10-08", "해외 출장 후 휴식", { status: "APPROVED" });
+    await leave("윤성호", "ANNUAL", "2026-10-12", "2026-10-12", null, { status: "APPROVED" });
+    await leave("박지은", "ANNUAL", "2026-10-19", "2026-10-20", "여행", {
+      status: "REJECTED",
+      at: 1,
+      comment: "마감 주간이라 다른 날로 부탁드립니다",
+    });
+
+    await tx.insert(s.webAuditLogs).values({
+      actorName: "seed-dev",
+      action: "DEV_SEED",
+      summary: "개발용 가짜 데이터 넣음",
+    });
+  });
+
+  console.log("개발용 가짜 데이터를 넣었습니다.");
+  process.exit(0);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
