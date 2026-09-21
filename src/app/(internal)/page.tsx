@@ -276,7 +276,7 @@ function Legend() {
       <span className={`rounded border px-1.5 py-0.5 ${TYPE_CHIP.AM_HALF}`}>반차</span>
       <span className={`rounded border px-1.5 py-0.5 ${TYPE_CHIP.HEALTH_CHECK}`}>건강검진</span>
       <span className={`rounded border px-1.5 py-0.5 ${TYPE_CHIP.CONDOLENCE}`}>경조사</span>
-      <span className={`animate-pulse rounded border border-dashed px-1.5 py-0.5 ${TYPE_CHIP.ANNUAL}`}>결재 대기</span>
+      <span className="animate-pulse rounded border border-dashed border-slate-300 bg-slate-100 px-1.5 py-0.5 text-slate-600">결재 대기</span>
       <span className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-red-600">빨간날 = 주말·공휴일</span>
       <span className="px-0.5">
         <span className="font-medium text-red-600">(교산 휴무일)</span> = 일본 법정 휴일

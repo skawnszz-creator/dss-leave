@@ -7,11 +7,11 @@ export { LEAVE_TYPE_INFO } from "./rules";
 
 /** 달력 칩 색 (휴가 종류별) */
 export const TYPE_CHIP: Record<LeaveType, string> = {
-  ANNUAL: "bg-sky-100 text-sky-900 border-sky-300",
-  AM_HALF: "bg-teal-100 text-teal-900 border-teal-300",
-  PM_HALF: "bg-teal-100 text-teal-900 border-teal-300",
+  ANNUAL: "bg-red-200 text-red-900 border-red-400",
+  AM_HALF: "bg-rose-100 text-rose-900 border-rose-300",
+  PM_HALF: "bg-rose-100 text-rose-900 border-rose-300",
   CONDOLENCE: "bg-violet-100 text-violet-900 border-violet-300",
-  HEALTH_CHECK: "bg-rose-100 text-rose-900 border-rose-300",
+  HEALTH_CHECK: "bg-blue-100 text-blue-900 border-blue-300",
   RESERVE: "bg-lime-100 text-lime-900 border-lime-300",
   OTHER: "bg-slate-100 text-slate-800 border-slate-300",
 };
