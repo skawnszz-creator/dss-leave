@@ -6,9 +6,10 @@ import { BalanceCard } from "@/components/BalanceCard";
 import { DoneBanner } from "@/components/DoneBanner";
 import { KindBadge, StatusBadge, StepTrail, TypeChip } from "@/components/badges";
 import { requireMember } from "@/lib/auth/guards";
-import { formatRange, todayKst, yearOf } from "@/lib/dates";
+import { formatRange, todayKst } from "@/lib/dates";
 import { getBalance, myRequests, type RequestView } from "@/lib/leave/data";
 import { formatDays } from "@/lib/leave/labels";
+import { leaveYearOf, leaveYearWindow } from "@/lib/leave/rules";
 
 
 export default async function MyLeavePage({
@@ -19,9 +20,12 @@ export default async function MyLeavePage({
   const member = await requireMember();
   const sp = await searchParams;
   const today = todayKst();
+  // 목록은 이번 연차 연도(입사 기념일 ~ 다음 기념일 전날)가 시작된 날부터 보여준다
+  const hireDate = member.employee.hireDate;
+  const thisWindow = leaveYearWindow(hireDate, leaveYearOf(hireDate, today));
   const [balance, requests] = await Promise.all([
     getBalance(member.employee),
-    myRequests(member.employee.id, yearOf(today)),
+    myRequests(member.employee.id, thisWindow.start),
   ]);
 
   return (
@@ -49,7 +53,7 @@ export default async function MyLeavePage({
 
         {requests.length === 0 ? (
           <p className="rounded-lg border border-slate-200 bg-white px-5 py-8 text-center text-sm text-slate-400">
-            올해 신청한 휴가가 없습니다.
+            이번 연차 연도에 신청한 휴가가 없습니다.
           </p>
         ) : (
           <ul className="space-y-3">

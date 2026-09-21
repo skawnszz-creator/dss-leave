@@ -6,9 +6,11 @@
  *
  * 규칙 요약 (REQUIREMENTS.md 3절)
  * - 근속은 달 단위로 센다. 입사 후 만 12개월이 되면 1년.
- * - 매년 1월 1일, 그날까지 채운 만 연수로 근속 표를 찾아 그해 연차를 준다.
+ * - 연차는 사람마다 **자기 입사 기념일에** 받는다 (2026-09-21 변경, 그전에는 1월 1일 일괄).
+ *   그 기념일까지 채운 만 연수로 근속 표를 찾는다.
  * - 입사 1년 미만은 한 달을 채울 때마다 1일(최대 11일). 입사 1주년 전날까지 쓸 수 있다.
- * - 못 쓴 연차는 다음 해로 넘어가지 않는다.
+ *   1주년이 되는 날 곧바로 첫 연차가 나오므로 비는 기간이 없다.
+ * - 못 쓴 연차는 다음 입사 기념일 전날에 사라진다. 넘어가지 않는다.
  * - 휴가는 먼저 사라질 일수부터 차감한다.
  * - 여러 날 휴가는 주말·공휴일·회사 휴무일을 빼고 센다.
  */
@@ -115,20 +117,54 @@ export function computeLeaveDays(
 export type TenureRuleRow = { fromYear: number; toYear: number; days: number };
 
 export type AnnualEntitlement = {
+  /** 연차 연도 = 이 연차를 받은 입사 기념일이 있는 해 */
   year: number;
-  /** 1월 1일 기준 만 근속 개월 */
+  /** 받는 날 (= 그해 입사 기념일) */
+  start: string;
+  /** 사라지는 날 (= 다음 입사 기념일 전날) */
+  end: string;
+  /** 받는 날 기준 만 근속 개월 */
   tenureMonths: number;
-  /** 1월 1일 기준 만 근속 연수 (만 12개월 = 1년) */
+  /** 받는 날 기준 만 근속 연수 (만 12개월 = 1년) */
   tenureYears: number;
   /** 근속 표로 정해진 일수 (조정 전) */
   baseDays: number;
   status:
     | "OK" // 근속 표대로 받음
-    | "NOT_HIRED" // 그해 1월 1일에 아직 입사 전
-    | "UNDER_ONE_YEAR" // 1월 1일에 만 1년이 안 됨 → 월차 대상
+    | "NOT_HIRED" // 아직 입사 전
+    | "UNDER_ONE_YEAR" // 입사한 해 — 1주년 전날까지는 월차(3-3)
     | "NO_RULE"; // 근속 표에 해당 연차가 없음 (관리자 확인 필요)
   rule: TenureRuleRow | null;
 };
+
+/* ------------------------------------------------------------------ */
+/* 연차 연도 — 입사 기념일에 시작해 다음 기념일 전날에 끝난다              */
+/*                                                                      */
+/* 사람마다 기간이 다르다. 연도 번호는 그 기간이 시작된 해로 쓴다.         */
+/* 예) 2020-03-15 입사 → 2026년 연차 = 2026-03-15 ~ 2027-03-14          */
+/* ------------------------------------------------------------------ */
+
+/** 그해의 입사 기념일. 2/29 입사자는 평년이면 2/28 (addMonths 와 같은 규칙) */
+export function anniversaryIn(hireDate: string, year: number): string {
+  return addMonths(hireDate, 12 * (year - yearOf(hireDate)));
+}
+
+export type LeaveYearWindow = { year: number; start: string; end: string };
+
+/** 연차 연도의 기간 */
+export function leaveYearWindow(hireDate: string, year: number): LeaveYearWindow {
+  return {
+    year,
+    start: anniversaryIn(hireDate, year),
+    end: addDays(anniversaryIn(hireDate, year + 1), -1),
+  };
+}
+
+/** 그 날짜가 속한 연차 연도 */
+export function leaveYearOf(hireDate: string, day: string): number {
+  const y = yearOf(day);
+  return day < anniversaryIn(hireDate, y) ? y - 1 : y;
+}
 
 /** 어떤 날짜 기준 근속 */
 export function tenureOn(hireDate: string, on: string) {
@@ -143,16 +179,18 @@ export function findRule(
   return rules.find((r) => r.fromYear <= years && years <= r.toYear) ?? null;
 }
 
-/** 그해 1월 1일에 받는 연차 */
+/** 그해 입사 기념일에 받는 연차 */
 export function annualEntitlement(
   hireDate: string,
   year: number,
   rules: readonly TenureRuleRow[],
 ): AnnualEntitlement {
-  const jan1 = `${year}-01-01`;
-  if (hireDate > jan1) {
+  const { start, end } = leaveYearWindow(hireDate, year);
+  if (year < yearOf(hireDate)) {
     return {
       year,
+      start,
+      end,
       tenureMonths: 0,
       tenureYears: 0,
       baseDays: 0,
@@ -160,10 +198,13 @@ export function annualEntitlement(
       rule: null,
     };
   }
-  const { months, years } = tenureOn(hireDate, jan1);
+  const { months, years } = tenureOn(hireDate, start);
   if (years < 1) {
+    // 입사한 해. 1주년 전날까지는 연차가 아니라 월차(3-3)를 쓴다
     return {
       year,
+      start,
+      end,
       tenureMonths: months,
       tenureYears: years,
       baseDays: 0,
@@ -174,6 +215,8 @@ export function annualEntitlement(
   const rule = findRule(rules, years);
   return {
     year,
+    start,
+    end,
     tenureMonths: months,
     tenureYears: years,
     baseDays: rule ? rule.days : 0,
@@ -216,7 +259,8 @@ export function monthlyAccruedOn(info: MonthlyInfo, day: string): number {
 /* 차감 배분                                                            */
 /*                                                                      */
 /* 휴가 하루하루를 날짜 순서대로 '어느 주머니에서 뺄지' 정한다.            */
-/* 주머니: 그해 연차(12월 31일에 사라짐), 월차(입사 1주년 전날에 사라짐)   */
+/* 주머니: 그 연차 연도의 연차(다음 입사 기념일 전날에 사라짐),            */
+/*         월차(입사 1주년 전날에 사라짐)                                */
 /* 먼저 사라질 주머니부터 뺀다.                                          */
 /* ------------------------------------------------------------------ */
 
@@ -232,7 +276,7 @@ export type LeaveDay = {
 export type LedgerInput = {
   hireDate: string;
   rules: readonly TenureRuleRow[];
-  /** 연도별 연차 조정 합계 */
+  /** 연차 연도별 조정 합계 */
   annualAdjust: ReadonlyMap<number, number>;
   /** 월차 조정 합계 */
   monthlyAdjust: number;
@@ -297,7 +341,7 @@ export function allocate(input: LedgerInput): Allocation {
 
   for (const day of sorted) {
     let need = day.amount;
-    const year = yearOf(day.date);
+    const year = leaveYearOf(input.hireDate, day.date);
 
     const candidates: { kind: "MONTHLY" | "ANNUAL"; expiry: string; avail: number }[] = [];
 
@@ -311,7 +355,11 @@ export function allocate(input: LedgerInput): Allocation {
 
     const annualAvail = annualTotal(input, year) - (annualAllocated.get(year) ?? 0);
     if (annualAvail > 0) {
-      candidates.push({ kind: "ANNUAL", expiry: `${year}-12-31`, avail: annualAvail });
+      candidates.push({
+        kind: "ANNUAL",
+        expiry: leaveYearWindow(input.hireDate, year).end,
+        avail: annualAvail,
+      });
     }
 
     candidates.sort((a, b) => a.expiry.localeCompare(b.expiry));
@@ -355,6 +403,7 @@ export function allocate(input: LedgerInput): Allocation {
 
 export type Balance = {
   today: string;
+  /** 오늘이 속한 연차 연도. 기간은 annual.entitlement 의 start~end */
   year: number;
   annual: {
     entitlement: AnnualEntitlement;
@@ -382,7 +431,7 @@ export type Balance = {
 
 export function balanceOn(input: LedgerInput, today: string): Balance {
   const alloc = allocate(input);
-  const year = yearOf(today);
+  const year = leaveYearOf(input.hireDate, today);
 
   const entitlement = annualEntitlement(input.hireDate, year, input.rules);
   const adjust = input.annualAdjust.get(year) ?? 0;

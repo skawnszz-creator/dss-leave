@@ -117,7 +117,7 @@ export default async function EmployeesPage({
               <th className="px-3 py-2 font-medium">직급</th>
               <th className="px-3 py-2 font-medium">입사일</th>
               <th className="px-3 py-2 font-medium">근속</th>
-              <th className="px-3 py-2 text-right font-medium">올해 연차</th>
+              <th className="px-3 py-2 text-right font-medium">이번 연차</th>
               <th className="px-3 py-2 text-right font-medium">사용·대기</th>
               <th className="px-3 py-2 text-right font-medium">남음</th>
               <th className="px-3 py-2 font-medium">월차</th>

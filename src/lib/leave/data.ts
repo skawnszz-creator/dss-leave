@@ -337,8 +337,8 @@ async function attach(requests: LeaveRequest[]): Promise<RequestView[]> {
   }));
 }
 
-/** 내 신청: 올해 1월 1일 이후 휴가 + 결재 중인 것 전부 */
-export async function myRequests(employeeId: string, sinceYear: number): Promise<RequestView[]> {
+/** 내 신청: 이번 연차 연도가 시작된 날 이후 휴가 + 결재 중인 것 전부 */
+export async function myRequests(employeeId: string, since: string): Promise<RequestView[]> {
   const rows = await db
     .select()
     .from(webLeaveRequests)
@@ -347,7 +347,7 @@ export async function myRequests(employeeId: string, sinceYear: number): Promise
         eq(webLeaveRequests.employeeId, employeeId),
         eq(webLeaveRequests.isDeleted, false),
         or(
-          gte(webLeaveRequests.endDate, `${sinceYear}-01-01`),
+          gte(webLeaveRequests.endDate, since),
           eq(webLeaveRequests.status, "PENDING"),
         ),
       ),
@@ -356,8 +356,12 @@ export async function myRequests(employeeId: string, sinceYear: number): Promise
   return attach(rows);
 }
 
-/** 그해에 걸친 휴가 (새 신청·날짜 변경분). 인쇄용 — 날짜 순 */
-export async function requestsInYear(employeeId: string, year: number): Promise<RequestView[]> {
+/** 그 기간에 걸친 휴가 (새 신청·날짜 변경분). 인쇄용 — 날짜 순 */
+export async function requestsInWindow(
+  employeeId: string,
+  from: string,
+  to: string,
+): Promise<RequestView[]> {
   const rows = await db
     .select()
     .from(webLeaveRequests)
@@ -366,8 +370,8 @@ export async function requestsInYear(employeeId: string, year: number): Promise<
         eq(webLeaveRequests.employeeId, employeeId),
         eq(webLeaveRequests.isDeleted, false),
         inArray(webLeaveRequests.kind, [...LIVE_KINDS]),
-        lte(webLeaveRequests.startDate, `${year}-12-31`),
-        gte(webLeaveRequests.endDate, `${year}-01-01`),
+        lte(webLeaveRequests.startDate, to),
+        gte(webLeaveRequests.endDate, from),
       ),
     )
     .orderBy(asc(webLeaveRequests.startDate), asc(webLeaveRequests.createdAt));

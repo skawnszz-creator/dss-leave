@@ -28,7 +28,7 @@ import {
   requestsOfEmployee,
 } from "@/lib/leave/data";
 import { formatDays } from "@/lib/leave/labels";
-import { allocate, annualEntitlement, monthlyInfo, tenureOn } from "@/lib/leave/rules";
+import { allocate, annualEntitlement, leaveYearOf, monthlyInfo, tenureOn } from "@/lib/leave/rules";
 
 const input =
   "rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:border-slate-500 focus:outline-none";
@@ -36,7 +36,7 @@ const input =
 const ENT_NOTE = {
   OK: "",
   NOT_HIRED: "입사 전",
-  UNDER_ONE_YEAR: "1월 1일에 만 1년 미만 → 월차",
+  UNDER_ONE_YEAR: "입사한 해 → 월차",
   NO_RULE: "근속 표에 없음",
 } as const;
 
@@ -60,7 +60,8 @@ export default async function EmployeeDetailPage({
   if (!employee) notFound();
 
   const today = todayKst();
-  const thisYear = yearOf(today);
+  // 연차 연도 = 입사 기념일에 시작하는 1년. 사람마다 다르다
+  const thisYear = leaveYearOf(employee.hireDate, today);
   const [ranks, holidays, rules, adjustments, accounts, requests] = await Promise.all([
     loadRanks(),
     loadHolidaySet(),
@@ -126,6 +127,9 @@ export default async function EmployeeDetailPage({
                 defaultValue={employee.hireDate}
                 className={`mt-1 block w-full ${input}`}
               />
+              <span className="mt-1 block text-[11px] text-slate-400">
+                연차 연도가 시작되는 날입니다. 고치면 지난 연도의 기간과 일수도 함께 다시 계산됩니다.
+              </span>
             </label>
             <label className="flex items-center gap-2 self-end pb-2 text-sm text-slate-700">
               <input name="isActive" type="checkbox" defaultChecked={employee.isActive} />
@@ -203,14 +207,14 @@ export default async function EmployeeDetailPage({
       <section className="rounded-lg border border-slate-200 bg-white p-4">
         <h2 className="text-sm font-semibold text-slate-800">연차 계산 내역</h2>
         <p className="mb-3 mt-0.5 text-xs text-slate-500">
-          매년 1월 1일, 그날까지 채운 만 근속(만 12개월 = 1년)으로 근속 표를 찾습니다. 남은 연차는 다음 해로 넘어가지 않습니다.
+          사람마다 **자기 입사 기념일**에 그해 연차를 받습니다. 그날까지 채운 만 근속(만 12개월 = 1년)으로 근속 표를 찾고, 남은 연차는 다음 기념일 전날에 사라집니다.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
             <thead className="text-left text-xs text-slate-500">
               <tr className="border-b border-slate-200">
-                <th className="py-2 pr-3 font-medium">연도</th>
-                <th className="py-2 pr-3 font-medium">1월 1일 근속</th>
+                <th className="py-2 pr-3 font-medium">연차 연도 (입사 기념일 기준)</th>
+                <th className="py-2 pr-3 font-medium">받는 날 근속</th>
                 <th className="py-2 pr-3 text-right font-medium">근속 표</th>
                 <th className="py-2 pr-3 text-right font-medium">조정</th>
                 <th className="py-2 pr-3 text-right font-medium">합계</th>
@@ -225,7 +229,12 @@ export default async function EmployeeDetailPage({
                 const use = alloc.annual.get(y);
                 return (
                   <tr key={y} className={y === thisYear ? "bg-sky-50/60" : ""}>
-                    <td className="py-2 pr-3 font-medium">{y}년</td>
+                    <td className="py-2 pr-3 font-medium">
+                      {y}년
+                      <span className="ml-1.5 text-xs font-normal text-slate-400 tabular">
+                        {ent.start} ~ {ent.end}
+                      </span>
+                    </td>
                     <td className="py-2 pr-3 text-slate-600">
                       {ent.status === "NOT_HIRED" ? "-" : formatTenure(ent.tenureMonths)}
                     </td>
@@ -247,9 +256,7 @@ export default async function EmployeeDetailPage({
                       {use ? `${formatDays(use.used)}${use.pending ? ` + ${formatDays(use.pending)}` : ""}` : "-"}
                     </td>
                     <td className={`py-2 text-xs ${ent.status === "NO_RULE" ? "text-red-700" : "text-slate-500"}`}>
-                      {ent.status === "NOT_HIRED" && yearOf(employee.hireDate) === y
-                        ? "입사한 해 → 월차"
-                        : ENT_NOTE[ent.status]}
+                      {ENT_NOTE[ent.status]}
                     </td>
                   </tr>
                 );
@@ -300,8 +307,11 @@ export default async function EmployeeDetailPage({
             </select>
           </label>
           <label className="text-xs text-slate-600">
-            연도 (연차만)
+            연차 연도 (연차만)
             <input name="year" type="number" defaultValue={thisYear} className={`mt-1 block w-24 ${input}`} />
+            <span className="mt-1 block text-[11px] text-slate-400">
+              {thisYear}년 = {balance.annual.entitlement.start} ~ {balance.annual.entitlement.end}
+            </span>
           </label>
           <label className="text-xs text-slate-600">
             일수 (빼려면 -)

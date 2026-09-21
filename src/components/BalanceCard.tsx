@@ -19,7 +19,9 @@ export function BalanceCard({
     <section className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex items-baseline justify-between">
         <h2 className="text-sm font-semibold text-slate-700">{title}</h2>
-        <span className="text-xs text-slate-400">{balance.year}년</span>
+        <span className="text-xs text-slate-400" title={`${ent.start} ~ ${ent.end}`}>
+          {balance.year}년 연차
+        </span>
       </div>
 
       <p className="mt-2 flex items-baseline gap-1">
@@ -38,7 +40,7 @@ export function BalanceCard({
           </dt>
           <dd className="mt-0.5 text-xs text-slate-500">
             {ent.status === "UNDER_ONE_YEAR" || ent.status === "NOT_HIRED" ? (
-              <>입사 1년 미만 — 올해는 연차 대신 월차로 받습니다{annual.adjust ? ` (조정 ${formatDays(annual.adjust)})` : ""}</>
+              <>입사 1년 미만 — 1주년까지는 연차 대신 월차로 받습니다{annual.adjust ? ` (조정 ${formatDays(annual.adjust)})` : ""}</>
             ) : (
               <>
                 받은 {formatDays(annual.total)} · 사용 {formatDays(annual.used)}
@@ -79,10 +81,10 @@ export function BalanceCard({
 
       {detailed && ent.status === "OK" && (
         <p className="mt-3 text-xs leading-relaxed text-slate-500">
-          {balance.year}년 1월 1일 기준 근속 {ent.tenureYears}년 → 근속 표 {ent.rule?.fromYear}~{ent.rule?.toYear}년차{" "}
-          {formatDays(ent.baseDays)}
+          입사 기념일 {formatDay(ent.start, true)} 기준 근속 {ent.tenureYears}년 → 근속 표{" "}
+          {ent.rule?.fromYear}~{ent.rule?.toYear}년차 {formatDays(ent.baseDays)}
           {annual.adjust !== 0 && <> + 관리자 조정 {annual.adjust > 0 ? "+" : ""}{formatDays(annual.adjust)}</>}
-          . 못 쓴 연차는 다음 해로 넘어가지 않습니다.
+          . 못 쓴 연차는 {formatDay(ent.end, true)}에 사라지고 넘어가지 않습니다.
         </p>
       )}
     </section>

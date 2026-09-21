@@ -3,12 +3,32 @@ import Link from "next/link";
 import { PrintButton } from "@/components/PrintButton";
 import { requireMember } from "@/lib/auth/guards";
 import { TIMEZONE, formatRange, formatTenure, todayKst, yearOf } from "@/lib/dates";
-import { getBalance, requestsInYear, type RequestView } from "@/lib/leave/data";
+import { getBalance, loadHolidaySet, requestsInWindow, type RequestView } from "@/lib/leave/data";
 import { LEAVE_TYPE_INFO, STATUS_LABEL, formatDays } from "@/lib/leave/labels";
-import { tenureOn } from "@/lib/leave/rules";
+import { leaveYearOf, leaveYearWindow, tenureOn, workdaysBetween } from "@/lib/leave/rules";
 
 /** 인쇄에 넣는 상태. 기본은 승인·결재 중, '모두'면 반려·취소·거둬들임·변경 전 기록까지 */
 const DEFAULT_STATUSES = new Set(["APPROVED", "PENDING"]);
+
+/**
+ * 그 휴가 중 이 연차 연도에 든 날수.
+ * 연차 연도가 입사 기념일에 바뀌므로, 기념일에 걸친 휴가는 두 해로 나뉘어 들어간다.
+ * (차감도 rules.ts 의 allocate 가 날짜별로 나눠 뺀다)
+ */
+function daysInPeriod(
+  r: RequestView,
+  from: string,
+  to: string,
+  holidays: ReadonlySet<string>,
+): number {
+  if (LEAVE_TYPE_INFO[r.leaveType].halfDay) {
+    return r.startDate >= from && r.startDate <= to ? 0.5 : 0;
+  }
+  const start = r.startDate < from ? from : r.startDate;
+  const end = r.endDate > to ? to : r.endDate;
+  if (start > end) return 0;
+  return workdaysBetween(start, end, holidays).length;
+}
 
 function shortDate(d: Date | null): string {
   if (!d) return "";
@@ -24,24 +44,31 @@ export default async function PrintMyLeavePage({
   const member = await requireMember();
   const sp = await searchParams;
   const today = todayKst();
-  const thisYear = yearOf(today);
-  const hireYear = yearOf(member.employee.hireDate);
+  // 연차 연도는 사람마다 다르다 — 입사 기념일에 시작해 다음 기념일 전날에 끝난다
+  const hireDate = member.employee.hireDate;
+  const hireYear = yearOf(hireDate);
+  const thisYear = leaveYearOf(hireDate, today);
 
   const yearParam = typeof sp.year === "string" ? Number(sp.year) : NaN;
   const year =
     Number.isInteger(yearParam) && yearParam >= hireYear && yearParam <= thisYear + 1 ? yearParam : thisYear;
   const showAll = sp.all === "1";
+  const period = leaveYearWindow(hireDate, year);
 
-  // 올해는 오늘 기준, 지난해는 12월 31일 기준 잔여
-  const asOf = year === thisYear ? today : year < thisYear ? `${year}-12-31` : `${year}-01-01`;
-  const [balance, all] = await Promise.all([
+  // 이번 연도는 오늘 기준, 지난 연도는 그 연도 마지막 날 기준 잔여
+  const asOf = year === thisYear ? today : year < thisYear ? period.end : period.start;
+  const [balance, all, holidays] = await Promise.all([
     getBalance(member.employee, undefined, asOf),
-    requestsInYear(member.employee.id, year),
+    requestsInWindow(member.employee.id, period.start, period.end),
+    loadHolidaySet(),
   ]);
-  const rows = showAll ? all : all.filter((r) => DEFAULT_STATUSES.has(r.status));
+  const rows = (showAll ? all : all.filter((r) => DEFAULT_STATUSES.has(r.status))).map((r) => ({
+    r,
+    inPeriod: daysInPeriod(r, period.start, period.end, holidays),
+  }));
   const approvedDeducted = rows
-    .filter((r) => r.status === "APPROVED" && r.deducts)
-    .reduce((sum, r) => Math.round((sum + r.days) * 10) / 10, 0);
+    .filter(({ r }) => r.status === "APPROVED" && r.deducts)
+    .reduce((sum, { inPeriod }) => Math.round((sum + inPeriod) * 10) / 10, 0);
 
   const years: number[] = [];
   for (let y = thisYear + 1; y >= hireYear && y >= thisYear - 4; y -= 1) years.push(y);
@@ -56,7 +83,7 @@ export default async function PrintMyLeavePage({
         <Link href="/leave" className="text-sm text-slate-500 hover:text-slate-900">
           ← 내 휴가
         </Link>
-        <span className="ml-2 text-sm text-slate-500">연도</span>
+        <span className="ml-2 text-sm text-slate-500">연차 연도</span>
         {years.map((y) => (
           <Link
             key={y}
@@ -86,7 +113,10 @@ export default async function PrintMyLeavePage({
         <header className="flex items-end justify-between border-b-2 border-slate-900 pb-3">
           <div>
             <p className="text-xs text-slate-500">DSS</p>
-            <h1 className="text-2xl font-bold tracking-tight">휴가 사용 내역 · {year}년</h1>
+            <h1 className="text-2xl font-bold tracking-tight">휴가 사용 내역 · {year}년 연차</h1>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {period.start} ~ {period.end} (입사일 기준)
+            </p>
           </div>
           <p className="text-xs text-slate-500">출력일 {today}</p>
         </header>
@@ -165,7 +195,7 @@ export default async function PrintMyLeavePage({
         </h2>
         {rows.length === 0 ? (
           <p className="mt-2 border border-slate-300 px-3 py-6 text-center text-sm text-slate-500">
-            {year}년 휴가 기록이 없습니다.
+            이 기간에 휴가 기록이 없습니다.
           </p>
         ) : (
           <table className="mt-2 w-full border-collapse text-sm">
@@ -181,8 +211,8 @@ export default async function PrintMyLeavePage({
               </tr>
             </thead>
             <tbody>
-              {rows.map((r, i) => (
-                <PrintRow key={r.id} r={r} no={i + 1} />
+              {rows.map(({ r, inPeriod }, i) => (
+                <PrintRow key={r.id} r={r} no={i + 1} inPeriod={inPeriod} />
               ))}
             </tbody>
             <tfoot>
@@ -202,7 +232,7 @@ export default async function PrintMyLeavePage({
         )}
 
         <p className="mt-4 text-[11px] leading-relaxed text-slate-500">
-          * 일수는 주말·공휴일을 뺀 날수이며 반차는 0.5일입니다. 못 쓴 연차는 다음 해로 넘어가지 않습니다.
+          * 일수는 주말·공휴일을 뺀 날수이며 반차는 0.5일입니다. 못 쓴 연차는 다음 입사 기념일 전날에 사라지고 넘어가지 않습니다.
           <br />* DSS 휴가 관리 시스템에서 출력했습니다.
         </p>
       </article>
@@ -210,7 +240,7 @@ export default async function PrintMyLeavePage({
   );
 }
 
-function PrintRow({ r, no }: { r: RequestView; no: number }) {
+function PrintRow({ r, no, inPeriod }: { r: RequestView; no: number; inPeriod: number }) {
   const info = LEAVE_TYPE_INFO[r.leaveType];
   return (
     <tr className="align-top">
@@ -221,7 +251,10 @@ function PrintRow({ r, no }: { r: RequestView; no: number }) {
       </td>
       <td className="border border-slate-300 px-2 py-1.5">{formatRange(r.startDate, r.endDate, true)}</td>
       <td className="border border-slate-300 px-2 py-1.5 text-right tabular whitespace-nowrap">
-        {formatDays(r.days)}
+        {formatDays(inPeriod)}
+        {inPeriod !== r.days && (
+          <span className="block text-[11px] text-slate-500">전체 {formatDays(r.days)} 중</span>
+        )}
         {!r.deducts && <span className="block text-[11px] text-slate-500">차감 없음</span>}
       </td>
       <td className="border border-slate-300 px-2 py-1.5 whitespace-nowrap">

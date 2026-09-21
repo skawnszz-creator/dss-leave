@@ -53,7 +53,7 @@ export default async function SettingsPage({
       <section className="rounded-lg border border-slate-200 bg-white p-4">
         <h2 className="text-sm font-semibold text-slate-800">근속 연차별 연차 일수</h2>
         <p className="mb-3 mt-0.5 text-xs text-slate-500">
-          매년 1월 1일, 그날까지 채운 만 근속으로 이 표를 찾아 그해 연차를 줍니다. 만 12개월 = 1년.
+          사람마다 자기 입사 기념일에, 그날까지 채운 만 근속으로 이 표를 찾아 그해 연차를 줍니다. 만 12개월 = 1년.
           1년이 안 된 직원은 이 표 대신 한 달마다 1일(월차)을 받습니다.
         </p>
         <div className="space-y-2">

@@ -8,9 +8,14 @@ import assert from "node:assert/strict";
 import { addMonths, fullMonths, calendarWeeks } from "../src/lib/dates";
 import { japanHolidays } from "../src/lib/jp-holidays";
 import {
+  allocate,
+  anniversaryIn,
   annualEntitlement,
   balanceOn,
   computeLeaveDays,
+  expandLeaveDays,
+  leaveYearOf,
+  leaveYearWindow,
   monthlyAccruedOn,
   monthlyInfo,
   shortageIfAdded,
@@ -42,23 +47,48 @@ check("근속은 만 개월로 센다", () => {
   assert.equal(fullMonths("2024-03-04", "2025-03-04"), 12);
 });
 
-check("2024-03-04 입사 → 2027년은 만 2년 → 1~2년차 10일", () => {
-  const e = annualEntitlement("2024-03-04", 2027, rules);
+check("연차 연도는 입사 기념일에 시작해 다음 기념일 전날에 끝난다", () => {
+  assert.deepEqual(leaveYearWindow("2020-03-15", 2026), {
+    year: 2026,
+    start: "2026-03-15",
+    end: "2027-03-14",
+  });
+  assert.equal(leaveYearOf("2020-03-15", "2027-01-10"), 2026); // 해가 바뀌어도 아직 2026년 연차
+  assert.equal(leaveYearOf("2020-03-15", "2027-03-14"), 2026);
+  assert.equal(leaveYearOf("2020-03-15", "2027-03-15"), 2027);
+  assert.equal(anniversaryIn("2024-02-29", 2027), "2027-02-28"); // 2/29 입사자는 평년에 2/28
+});
+
+check("2024-03-04 입사 → 2026년 연차는 2026-03-04 부여, 만 2년 → 1~2년차 10일", () => {
+  const e = annualEntitlement("2024-03-04", 2026, rules);
+  assert.equal(e.start, "2026-03-04");
+  assert.equal(e.end, "2027-03-03");
   assert.equal(e.tenureYears, 2);
   assert.equal(e.baseDays, 10);
   assert.equal(e.status, "OK");
 });
 
-check("2024-03-04 입사 → 2028년은 만 3년 → 3~4년차 11일", () => {
-  const e = annualEntitlement("2024-03-04", 2028, rules);
+check("2024-03-04 입사 → 2027년 연차는 만 3년 → 3~4년차 11일", () => {
+  const e = annualEntitlement("2024-03-04", 2027, rules);
+  assert.equal(e.start, "2027-03-04");
   assert.equal(e.tenureYears, 3);
   assert.equal(e.baseDays, 11);
 });
 
-check("1월 1일에 만 1년이 안 되면 연차 대신 월차", () => {
-  const e = annualEntitlement("2026-11-02", 2027, rules);
+check("입사한 해는 연차 대신 월차", () => {
+  const e = annualEntitlement("2026-11-02", 2026, rules);
   assert.equal(e.status, "UNDER_ONE_YEAR");
   assert.equal(e.baseDays, 0);
+});
+
+check("1주년이 되는 날 곧바로 첫 연차가 나온다 (비는 기간 없음)", () => {
+  const info = monthlyInfo("2026-11-02");
+  const e = annualEntitlement("2026-11-02", 2027, rules);
+  assert.equal(info.validUntil, "2027-11-01"); // 월차 마지막 날
+  assert.equal(e.start, "2027-11-02"); // 그 다음 날 바로 연차
+  assert.equal(e.tenureYears, 1);
+  assert.equal(e.baseDays, 10);
+  assert.equal(e.status, "OK");
 });
 
 check("근속 표에 없는 연차면 NO_RULE (관리자 확인)", () => {
@@ -117,11 +147,12 @@ check("생긴 월차보다 많이 쓰면 모자란다", () => {
   assert.equal(shortageIfAdded(newbie([]), days), 1);
 });
 
-check("먼저 사라질 주머니부터: 월차(6/30 만료)가 연차(12/31 만료)보다 먼저", () => {
+check("먼저 사라질 주머니부터: 월차가 연차보다 먼저", () => {
+  // 2026-07-01 입사 → 월차는 2027-06-30 까지, 첫 연차는 2027-07-01 에 나온다
   const input: LedgerInput = {
     hireDate: "2026-07-01",
     rules,
-    annualAdjust: new Map([[2027, 5]]),
+    annualAdjust: new Map([[2026, 5]]), // 입사한 해엔 연차가 없으니 관리자 조정분 5일
     monthlyAdjust: 0,
     days: [
       { date: "2027-03-02", amount: 1, requestId: "c", pending: false },
@@ -129,23 +160,53 @@ check("먼저 사라질 주머니부터: 월차(6/30 만료)가 연차(12/31 만
     ],
   };
   const b = balanceOn(input, "2027-03-10");
+  assert.equal(b.year, 2026);
   assert.equal(b.monthly?.used, 1); // 3/2 는 월차에서
-  assert.equal(b.annual.used, 1); // 8/2 는 월차가 끝나 연차에서
   assert.equal(b.annual.total, 5);
+  assert.equal(b.annual.used, 0);
+
+  const after = balanceOn(input, "2027-08-10");
+  assert.equal(after.year, 2027); // 1주년이 지나 다음 연차 연도
+  assert.equal(after.annual.total, 10); // 만 1년 → 1~2년차
+  assert.equal(after.annual.used, 1); // 8/2 는 연차에서
 });
 
-check("못 쓴 연차는 다음 해로 넘어가지 않는다", () => {
+check("입사 기념일에 걸친 휴가는 두 연차 연도로 나뉘어 차감된다", () => {
+  // 2020-03-15 입사 → 2026년 연차는 2027-03-14 까지, 2027년 연차는 2027-03-15 부터
+  const days = expandLeaveDays(
+    { id: "x", leaveType: "ANNUAL", startDate: "2027-03-11", endDate: "2027-03-18", deducts: true },
+    false,
+    noHolidays,
+  );
+  assert.equal(days.length, 6); // 주말 이틀 뺀 6일
+  const alloc = allocate({
+    hireDate: "2020-03-15",
+    rules: [{ fromYear: 1, toYear: 40, days: 10 }],
+    annualAdjust: new Map(),
+    monthlyAdjust: 0,
+    days,
+  });
+  assert.equal(alloc.annual.get(2026)?.used, 2); // 3/11~3/12
+  assert.equal(alloc.annual.get(2027)?.used, 4); // 3/15~3/18
+  assert.equal(alloc.shortTotal, 0);
+});
+
+check("못 쓴 연차는 다음 입사 기념일 전날에 사라진다", () => {
   const input: LedgerInput = {
     hireDate: "2024-03-04",
     rules,
     annualAdjust: new Map(),
     monthlyAdjust: 0,
-    days: [],
+    days: [{ date: "2027-06-01", amount: 1, requestId: "e", pending: false }],
   };
-  const b2027 = balanceOn(input, "2027-12-31");
-  const b2028 = balanceOn(input, "2028-01-01");
-  assert.equal(b2027.annual.remaining, 10);
-  assert.equal(b2028.annual.remaining, 11); // 2027년 남은 10일은 더해지지 않는다
+  const before = balanceOn(input, "2028-03-03"); // 2027년 연차의 마지막 날
+  const after = balanceOn(input, "2028-03-04"); // 2028년 연차의 첫날
+  assert.equal(before.year, 2027);
+  assert.equal(before.annual.used, 1);
+  assert.equal(before.annual.remaining, 10); // 11 - 1
+  assert.equal(after.year, 2028);
+  assert.equal(after.annual.used, 0);
+  assert.equal(after.annual.remaining, 11); // 남았던 10일은 넘어오지 않는다
 });
 
 check("같은 날 오전 반차 + 오후 반차는 겹치지 않는다", () => {
