@@ -34,7 +34,7 @@ export default async function MyLeavePage({
               href="/leave/print"
               className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              🖨 사용 내역 인쇄
+              🖨 휴가 내역 인쇄
             </Link>
             <Link
               href="/leave/new"
@@ -119,7 +119,7 @@ function RequestCard({ r, today }: { r: RequestView; today: string }) {
                 type="submit"
                 className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
               >
-                신청 거둬들이기
+                휴가 신청 취소
               </button>
             </ActionForm>
           )}

@@ -22,7 +22,7 @@ export const TYPE_SHORT: Record<LeaveType, string> = {
   AM_HALF: "오전반차",
   PM_HALF: "오후반차",
   CONDOLENCE: "경조사",
-  SICK: "병가",
+  SICK: "건강검진",
   RESERVE: "예비군",
   OTHER: "기타",
 };

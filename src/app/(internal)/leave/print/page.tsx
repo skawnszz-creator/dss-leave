@@ -194,7 +194,7 @@ export default async function PrintMyLeavePage({
                   {formatDays(approvedDeducted)}
                 </td>
                 <td colSpan={3} className="border border-slate-300 px-2 py-1.5 text-xs text-slate-500">
-                  경조사·병가·예비군 등은 연차에서 빠지지 않습니다
+                  경조사·건강검진·예비군 등은 연차에서 빠지지 않습니다
                 </td>
               </tr>
             </tfoot>

@@ -65,7 +65,7 @@ export function LeaveForm({
               <TypeOption key={t} type={t} checked={leaveType === t} onChange={setLeaveType} />
             ))}
           </div>
-          <p className="mb-2 mt-4 text-xs font-medium text-slate-500">연차에서 빠지지 않는 휴가</p>
+          <p className="mb-2 mt-4 text-xs font-medium text-slate-500">공가 신청(연차 차감X)</p>
           <div className="flex flex-wrap gap-2">
             {OTHER_TYPES.map((t) => (
               <TypeOption key={t} type={t} checked={leaveType === t} onChange={setLeaveType} />

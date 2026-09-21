@@ -34,7 +34,7 @@ export const LEAVE_TYPE_INFO: Record<
   AM_HALF: { label: "오전 반차", deducts: true, halfDay: true },
   PM_HALF: { label: "오후 반차", deducts: true, halfDay: true },
   CONDOLENCE: { label: "경조사", deducts: false, halfDay: false },
-  SICK: { label: "병가", deducts: false, halfDay: false },
+  SICK: { label: "건강검진", deducts: false, halfDay: false },
   RESERVE: { label: "예비군·민방위", deducts: false, halfDay: false },
   OTHER: { label: "기타", deducts: false, halfDay: false },
 };
