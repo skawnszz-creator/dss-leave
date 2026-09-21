@@ -32,7 +32,7 @@ export const LEAVE_TYPES = [
   "AM_HALF", // 오전 반차 0.5일
   "PM_HALF", // 오후 반차 0.5일
   "CONDOLENCE", // 경조사 (차감 없음)
-  "SICK", // 화면에는 '건강검진' (차감 없음)
+  "HEALTH_CHECK", // 건강검진 (차감 없음)
   "RESERVE", // 예비군·민방위 (차감 없음)
   "OTHER", // 기타 (차감 없음)
 ] as const;

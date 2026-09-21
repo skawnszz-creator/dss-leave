@@ -17,7 +17,7 @@ export default async function ChangeLeavePage({ params }: { params: Promise<{ id
   const problem = !req || req.employeeId !== member.employee.id || req.kind === "CANCEL"
     ? "휴가를 찾을 수 없습니다."
     : req.status !== "APPROVED"
-      ? "결재가 끝난 휴가만 날짜를 바꿀 수 있습니다. 결재 중이면 신청을 거둬들이고 다시 신청하세요."
+      ? "결재가 끝난 휴가만 날짜를 바꿀 수 있습니다. 결재 중이면 신청을 취소하고 다시 신청하세요."
       : req.startDate < today
         ? "이미 시작했거나 지난 휴가는 바꿀 수 없습니다. 휴가 관리자에게 정정을 요청하세요."
         : req.openFollowUp

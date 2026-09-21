@@ -6,7 +6,7 @@ const MESSAGES: Record<string, string> = {
   changed: "날짜를 바꿨습니다.",
   "cancel-submitted": "취소를 신청했습니다. 승인되기 전까지는 휴가가 그대로 유지됩니다.",
   canceled: "휴가를 취소했습니다.",
-  withdrawn: "신청을 거둬들였습니다.",
+  withdrawn: "신청을 취소했습니다.",
   approved: "승인했습니다. 다른 결재권자의 승인을 기다립니다.",
   finished: "승인했습니다. 결재권자가 모두 승인해 확정되었습니다.",
   rejected: "반려했습니다. 신청자에게 반려 사유가 보입니다.",

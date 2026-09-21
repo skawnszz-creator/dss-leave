@@ -113,7 +113,7 @@ function RequestCard({ r, today }: { r: RequestView; today: string }) {
       {(r.status === "PENDING" || canFollowUp) && (
         <div className="mt-3 flex flex-wrap items-start gap-2 border-t border-slate-100 pt-3">
           {r.status === "PENDING" && (
-            <ActionForm action={withdrawAction} confirm="이 신청을 거둬들일까요?" className="flex flex-wrap items-center gap-2">
+            <ActionForm action={withdrawAction} confirm="이 신청을 취소할까요?" className="flex flex-wrap items-center gap-2">
               <input type="hidden" name="requestId" value={r.id} />
               <button
                 type="submit"

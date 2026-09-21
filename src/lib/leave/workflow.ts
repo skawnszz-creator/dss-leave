@@ -371,7 +371,7 @@ export async function withdrawRequest(member: Member, requestId: string): Promis
 
   if (done === "NOT_FOUND") return fail("신청을 찾을 수 없습니다.");
   if (done === "NOT_PENDING") return fail("이미 결재가 끝난 신청입니다.");
-  return { ok: true, message: "신청을 거둬들였습니다.", code: "withdrawn" };
+  return { ok: true, message: "신청을 취소했습니다.", code: "withdrawn" };
 }
 
 /* ------------------------------------------------------------------ */

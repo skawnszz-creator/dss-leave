@@ -9,7 +9,7 @@ import { formatDays } from "@/lib/leave/labels";
 import { LEAVE_TYPE_INFO, computeLeaveDays } from "@/lib/leave/rules";
 
 const DEDUCT_TYPES: LeaveType[] = ["ANNUAL", "AM_HALF", "PM_HALF"];
-const OTHER_TYPES: LeaveType[] = ["CONDOLENCE", "SICK", "RESERVE", "OTHER"];
+const OTHER_TYPES: LeaveType[] = ["CONDOLENCE", "HEALTH_CHECK", "RESERVE", "OTHER"];
 
 /**
  * 휴가 신청 · 날짜 변경 신청 폼.

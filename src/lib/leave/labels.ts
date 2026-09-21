@@ -11,7 +11,7 @@ export const TYPE_CHIP: Record<LeaveType, string> = {
   AM_HALF: "bg-teal-100 text-teal-900 border-teal-300",
   PM_HALF: "bg-teal-100 text-teal-900 border-teal-300",
   CONDOLENCE: "bg-violet-100 text-violet-900 border-violet-300",
-  SICK: "bg-rose-100 text-rose-900 border-rose-300",
+  HEALTH_CHECK: "bg-rose-100 text-rose-900 border-rose-300",
   RESERVE: "bg-lime-100 text-lime-900 border-lime-300",
   OTHER: "bg-slate-100 text-slate-800 border-slate-300",
 };
@@ -22,7 +22,7 @@ export const TYPE_SHORT: Record<LeaveType, string> = {
   AM_HALF: "오전반차",
   PM_HALF: "오후반차",
   CONDOLENCE: "경조사",
-  SICK: "건강검진",
+  HEALTH_CHECK: "건강검진",
   RESERVE: "예비군",
   OTHER: "기타",
 };

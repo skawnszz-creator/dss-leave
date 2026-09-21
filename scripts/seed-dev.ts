@@ -206,7 +206,7 @@ async function main() {
     await leave("송하린", "ANNUAL", "2026-07-10", "2026-07-10", "개인 사정", { status: "APPROVED" });
     await leave("이준호", "ANNUAL", "2026-09-07", "2026-09-08", "가족 행사", { status: "APPROVED" });
     await leave("박지은", "AM_HALF", "2026-09-11", "2026-09-11", "병원 진료", { status: "APPROVED" });
-    await leave("송하린", "SICK", "2026-09-15", "2026-09-15", "감기몸살", { status: "APPROVED" });
+    await leave("송하린", "HEALTH_CHECK", "2026-09-15", "2026-09-15", "종합건강검진", { status: "APPROVED" });
     await leave("한도윤", "ANNUAL", "2026-09-21", "2026-09-23", "추석 귀성", { status: "PENDING", approved: ["과장"] });
     await leave("정민재", "ANNUAL", "2026-09-28", "2026-09-29", "여행", { status: "PENDING", approved: [] });
     await leave("김서연", "PM_HALF", "2026-09-30", "2026-09-30", "은행 업무", { status: "PENDING", approved: [] });
